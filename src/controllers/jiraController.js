@@ -19,7 +19,7 @@ async function handleWebhook(req, res) {
   const { webhookEvent, issue } = req.body;
   if (!issue) return;
 
-  const key         = issue.key;
+  const key         = (issue.key || '').trim();
   const issueType   = issue.fields?.issuetype?.name;
   const summary     = issue.fields?.summary || '';
   const description = extractDescription(issue.fields?.description);
@@ -38,8 +38,25 @@ async function handleWebhook(req, res) {
       await handleStoryDeleted(key);
     }
   } catch (err) {
-    console.error(`[JIRA WEBHOOK] Erro processando ${key}:`, err.message);
+    console.error(`[JIRA WEBHOOK] Erro processando ${JSON.stringify(key)}:`, err.message);
+    // Mostra mais detalhes (axios / request errors) para facilitar diagnóstico
+    if (err.response) {
+      console.error('[JIRA WEBHOOK] response:', {
+        status: err.response.status,
+        data: err.response.data
+      });
+    }
+    console.error(err.stack || err);
   }
+}
+
+async function getDefaultCreatedBy() {
+  // Webhook actions run without an authenticated user, but the test_cases.created_by
+  // foreign key requires a valid users.id. Use the first available user as fallback.
+  const [users] = await db.execute('SELECT id FROM users LIMIT 1');
+  if (users.length) return users[0].id;
+
+  throw new Error('Nenhum usuário cadastrado. Crie um usuário antes de processar webhooks do Jira.');
 }
 
 // ── Story criada → gera Gherkin + casos de teste ──────────────
@@ -63,24 +80,25 @@ async function handleStoryCreated({ key, summary, description, acceptance }) {
 
   // Salva casos de teste no banco
   const caseIds = [];
+  const createdBy = await getDefaultCreatedBy();
   for (const tc of testCases) {
     const id = uuid();
-await db.execute(
-  `INSERT INTO test_cases (
-     id, title, description, preconditions, priority, automation_status, project_id, status, created_by
-   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  [
-    id,
-    tc.title,
-    `${tc.description}\n\n${tc.gherkin_text}`,
-    tc.preconditions,
-    tc.priority,
-    'not_automated',   // valor válido do ENUM
-    projectId,
-    'draft',           // valor válido do ENUM
-    'system'
-  ]
-);
+    await db.execute(
+      `INSERT INTO test_cases (
+         id, title, description, preconditions, priority, automation_status, project_id, status, created_by
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        tc.title,
+        `${tc.description}\n\n${tc.gherkin_text}`,
+        tc.preconditions,
+        tc.priority,
+        'not_automated',   // valor válido do ENUM
+        projectId,
+        'draft',           // valor válido do ENUM
+        createdBy
+      ]
+    );
 
 
 

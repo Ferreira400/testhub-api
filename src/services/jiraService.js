@@ -12,6 +12,11 @@ const JIRA_EMAIL   = process.env.JIRA_EMAIL;
 const JIRA_TOKEN   = process.env.JIRA_API_TOKEN;
 const PROJECT_KEY  = process.env.JIRA_PROJECT_KEY || 'TH';
 
+// Permite configurar IDs de campo custom via env vars (pode variar por instância Jira)
+const CUSTOMFIELD_GHERKIN_GENERATED = process.env.JIRA_CUSTOMFIELD_GHERKIN_GENERATED || 'customfield_gherkin_generated';
+const CUSTOMFIELD_TESTHUB_CASE_ID   = process.env.JIRA_CUSTOMFIELD_TESTHUB_CASE_ID   || 'customfield_testhub_case_id';
+const CUSTOMFIELD_TESTHUB_STATUS    = process.env.JIRA_CUSTOMFIELD_TESTHUB_STATUS    || 'customfield_testhub_status';
+
 const jira = axios.create({
   baseURL: `${JIRA_URL}/rest/api/3`,
   auth: { username: JIRA_EMAIL, password: JIRA_TOKEN },
@@ -76,16 +81,31 @@ async function setTestHubFields(issueKey, { caseId, status, gherkinGenerated }) 
   // Os IDs dos campos custom variam por instância Jira
   // Busque com: GET /rest/api/3/field
   const fields = {};
-  if (caseId          !== undefined) fields['customfield_testhub_case_id']      = String(caseId);
-  if (status          !== undefined) fields['customfield_testhub_status']        = status;
-  if (gherkinGenerated !== undefined) fields['customfield_gherkin_generated']   = gherkinGenerated;
-  if (Object.keys(fields).length) await updateIssue(issueKey, fields);
+  if (caseId          !== undefined) fields[CUSTOMFIELD_TESTHUB_CASE_ID]    = String(caseId);
+  if (status          !== undefined) fields[CUSTOMFIELD_TESTHUB_STATUS]      = status;
+  if (gherkinGenerated !== undefined) fields[CUSTOMFIELD_GHERKIN_GENERATED] = gherkinGenerated;
+
+  if (!Object.keys(fields).length) return;
+
+  try {
+    await updateIssue(issueKey, fields);
+  } catch (err) {
+    // Alguns campos custom podem não estar disponíveis no projeto / tela.
+    // Nesse caso, apenas logamos e seguimos em frente (não queremos interromper o webhook inteiro).
+    const errKey = err?.response?.data?.errors ? Object.keys(err.response.data.errors)[0] : null;
+    if (err?.response?.status === 400 && errKey) {
+      console.warn('[JIRA] Não foi possível setar campo customizado:', errKey, err.response.data.errors[errKey]);
+      return;
+    }
+    throw err;
+  }
 }
 
 // ── Busca issues ──────────────────────────────────────────────
 
 async function searchIssues(jql, fields = ['summary', 'status', 'assignee', 'description']) {
-  const { data } = await jira.post('/search', {
+  // Jira Cloud migrated search endpoint to /rest/api/3/search/jql (410 if not used).
+  const { data } = await jira.post('/search/jql', {
     jql,
     fields,
     maxResults: 100,

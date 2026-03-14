@@ -5,10 +5,14 @@
 
 const https = require('https');
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY?.trim();
 const GROQ_MODEL   = 'llama-3.1-8b-instant';
 
 function callGroq(prompt) {
+  if (!GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY não definido. Defina na variável de ambiente GROQ_API_KEY.');
+  }
+
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model:       GROQ_MODEL,
@@ -25,11 +29,17 @@ function callGroq(prompt) {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
         'Content-Type':  'application/json',
         'Content-Length': Buffer.byteLength(body),
+        'User-Agent':    'TestHub/1.0',
       },
     }, res => {
       let data = '';
       res.on('data', c => data += c);
       res.on('end', () => {
+        const statusCode = res.statusCode;
+        if (!statusCode || statusCode < 200 || statusCode >= 300) {
+          return reject(new Error(`Groq API erro ${statusCode}: ${data}`));
+        }
+
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) return reject(new Error(parsed.error.message || JSON.stringify(parsed.error)));
