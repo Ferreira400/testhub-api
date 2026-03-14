@@ -68,4 +68,18 @@ router.get('/reports/dashboard',      auth, reportsCtrl.dashboard);
 router.get('/reports/cycle/:cycleId', auth, reportsCtrl.byCycle);
 router.get('/reports/squad/:squadId', auth, reportsCtrl.bySquad);
 
+
+// Jira Integration
+const jiraCtrl = require('../controllers/jiraController');
+router.post('/jira/webhook',                    jiraCtrl.handleWebhook);
+router.get ('/jira/links',               auth,  jiraCtrl.listLinks);
+router.get ('/jira/generate/:jiraKey',   auth,  jiraCtrl.generateGherkinManual);
+router.post('/jira/sync/execution/:executionId', auth, jiraCtrl.syncExecutionToJira);
+router.post('/jira/sync/cycle/:cycleId', auth,  jiraCtrl.syncCycleToJira);
+
+// GitHub OAuth para Copilot
+const ghAuth = require('../controllers/githubAuthController');
+router.get('/jira/github-auth',        ghAuth.startAuth);
+router.get('/jira/github-auth/status', ghAuth.checkStatus);
 module.exports = router;
+
