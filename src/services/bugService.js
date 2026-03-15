@@ -44,17 +44,51 @@ async function createBugFromExecution(executionId) {
     `*Ciclo:* ${exec.cycle_name}\n` +
     `*Squad:* ${exec.squad_name}\n` +
     `*Executado por:* ${exec.executed_by_name}\n` +
-    `*Prioridade:* ${exec.priority}\n\n` +
+    `*Prioridade:* ${exec.priority || 'N/A'}\n\n` +
     `*Comentários da execução:*\n${exec.comments || 'Sem comentários'}\n\n` +
     `*Ver execução no TestHub:* ${FRONTEND_URL}/executions/${executionId}`;
 
-  const bug = await jiraService.createIssue({
-    summary:     bugSummary,
-    description: bugDescription,
-    issueType:   'Bug',
-    parentKey:   exec.story_key || undefined,
-    labels:      ['testhub-auto', 'qa-failure', `squad-${exec.squad_name?.toLowerCase().replace(/\s+/g,'-')}`],
-  });
+  let bug;
+  let issueTypeToUse = 'Bug';
+  let parentKeyToUse = undefined;
+
+  // Valida se parent existe no Jira (se fornecido)
+  if (exec.story_key) {
+    try {
+      await jiraService.getIssue(exec.story_key);
+      parentKeyToUse = exec.story_key;
+    } catch (err) {
+      console.warn(`[BUG] Story ${exec.story_key} não encontrada no Jira, criando como issue independente`);
+    }
+  }
+
+  try {
+    bug = await jiraService.createIssue({
+      summary:     bugSummary,
+      description: bugDescription,
+      issueType:   issueTypeToUse,
+      parentKey:   parentKeyToUse,
+      labels:      ['testhub-auto', 'qa-failure', `squad-${exec.squad_name?.toLowerCase().replace(/\s+/g,'-')}`],
+    });
+  } catch (err) {
+    // Se falhar com 400 tipo inválido, tenta "Task"
+    if (err.response?.status === 400 && issueTypeToUse === 'Bug') {
+      console.warn('[BUG] Tipo "Bug" não encontrado, tentando "Task"...');
+      try {
+        bug = await jiraService.createIssue({
+          summary:     bugSummary,
+          description: bugDescription,
+          issueType:   'Task',
+          parentKey:   parentKeyToUse,
+          labels:      ['testhub-auto', 'qa-failure', `squad-${exec.squad_name?.toLowerCase().replace(/\s+/g,'-')}`],
+        });
+      } catch (err2) {
+        throw new Error(`Falha ao criar issue no Jira (tentou Bug e Task): ${err2.response?.data?.errorMessages?.[0] || err2.message}`);
+      }
+    } else {
+      throw err;
+    }
+  }
 
   // Salva vínculo no banco
   const bugLinkId = uuid();

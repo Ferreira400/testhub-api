@@ -35,4 +35,14 @@ async function handleBugResolved(bugKey, status) {
   }
 }
 
-module.exports = { createFromExecution, listBugs, handleBugResolved };
+// PATCH /bugs/:id — atualiza status do bug
+async function updateBugStatus(req, res) {
+  try {
+    const { status } = req.body;
+    const db = require('../config/db');
+    await db.execute('UPDATE bug_links SET status = ?, resolved_at = IF(? = \'resolved\', NOW(), resolved_at) WHERE id = ?', [status, status, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+}
+
+module.exports = { createFromExecution, listBugs, handleBugResolved, updateBugStatus };

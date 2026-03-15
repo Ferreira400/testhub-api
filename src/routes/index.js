@@ -88,9 +88,11 @@ router.get('/jira/github-auth/status', ghAuth.checkStatus);
 // Bugs
 const bugCtrl = require('../controllers/bugController');
 router.get('/bugs',                              auth, bugCtrl.listBugs);
+router.patch('/bugs/:id',                        auth, bugCtrl.updateBugStatus);
 router.post('/bugs/from-execution/:executionId', auth, bugCtrl.createFromExecution);
 
 module.exports = router;
+
 
 
 

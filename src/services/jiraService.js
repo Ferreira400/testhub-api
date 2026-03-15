@@ -39,8 +39,18 @@ async function createIssue({ summary, description, issueType = 'Bug', parentKey,
       ...(parentKey ? { parent: { key: parentKey } } : {}),
     },
   };
-  const { data } = await jira.post('/issue', body);
-  return data;
+  try {
+    const { data } = await jira.post('/issue', body);
+    return data;
+  } catch (err) {
+    console.error('[JIRA] Erro ao criar issue:', {
+      status: err.response?.status,
+      errorMessages: err.response?.data?.errorMessages,
+      errors: err.response?.data?.errors,
+      body,
+    });
+    throw err;
+  }
 }
 
 async function addComment(issueKey, text) {

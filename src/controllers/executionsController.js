@@ -100,7 +100,10 @@ exports.create = async (req, res) => {
     // Cria bug automaticamente se failed
     if (status === 'failed') {
       const bugService = require('../services/bugService');
-      bugService.createBugFromExecution(id).catch(e => console.warn('[BUG] Auto-create failed:', e.message));
+      bugService.createBugFromExecution(id).catch(e => {
+        const jiraError = e.response?.data?.errorMessages?.[0] || e.response?.data?.errors?.summary?.[0] || e.message;
+        console.warn('[BUG] Auto-create failed:', jiraError || JSON.stringify(e.response?.data));
+      });
     }
   } catch (err) {
     console.error('[EXEC] ERRO create:', err.message);
