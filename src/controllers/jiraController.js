@@ -20,26 +20,47 @@ async function handleWebhook(req, res) {
   const summary     = issue.fields?.summary || '';
   const description = extractDescription(issue.fields?.description);
   const acceptance  = issue.fields?.customfield_10016 || '';
+  const status      = issue.fields?.status?.name || '';
 
   try {
-    if (webhookEvent === 'jira:issue_created' && issueType === 'Story') {
-      await handleStoryCreated({ key, summary, description, acceptance });
+    if (webhookEvent === 'jira:issue_created') {
+      if (issueType === 'Story') {
+        await handleStoryCreated({ key, summary, description, acceptance });
+      }
+      // Bug criado pelo TestHub — ignora para evitar loop
     }
+
     if (webhookEvent === 'jira:issue_updated') {
-        if (webhookEvent === 'jira:issue_updated') {
-  // Verifica se é um Bug sendo resolvido
-  if (issueType === 'Bug') {
-    const status = issue.fields?.status?.name || '';
-    const { handleBugResolved } = require('./bugController');
-    await handleBugResolved(key, status);
-    return;
-  }
-  await handleStoryUpdated({ key, summary, description, issue });
-}
+      if (issueType === 'Bug') {
+        // Mapeia status do Jira para status interno
+        const statusMap = {
+          'to do':       'open',
+          'in progress': 'in_progress',
+          'done':        'resolved',
+          'fixed':       'resolved',
+          'resolved':    'resolved',
+          'closed':      'closed',
+        };
+        const normalized = status.toLowerCase();
+        const newStatus  = statusMap[normalized] || null;
 
+        if (newStatus) {
+          await db.execute(
+            'UPDATE bug_links SET status = ? WHERE jira_bug_key = ?',
+            [newStatus, key]
+          );
+          console.log(`[BUG] Status do bug ${key} atualizado para: ${newStatus}`);
+        }
 
-      await handleStoryUpdated({ key, summary, issue });
+        // Se resolvido, dispara fluxo de retest
+        const { handleBugResolved } = require('./bugController');
+        await handleBugResolved(key, status);
+        return;
+      }
+
+      await handleStoryUpdated({ key, summary });
     }
+
     if (webhookEvent === 'jira:issue_deleted') {
       await handleStoryDeleted(key);
     }
@@ -55,8 +76,13 @@ async function getDefaultCreatedBy() {
   throw new Error('Nenhum usuario cadastrado.');
 }
 
+function generateCaseCode(jiraKey, index) {
+  const prefix = jiraKey ? jiraKey.replace('-', '') : 'TC';
+  return `${prefix}-${String(index + 1).padStart(3, '0')}`;
+}
+
 async function handleStoryCreated({ key, summary, description, acceptance }) {
-  console.log(`[JIRA] Story criada: ${key} — ${summary}`);
+  console.log(`[JIRA] Story criada: ${key} - ${summary}`);
 
   const [projects] = await db.execute('SELECT id FROM projects LIMIT 1');
   const [squads]   = await db.execute('SELECT id, name FROM squads LIMIT 1');
@@ -73,17 +99,19 @@ async function handleStoryCreated({ key, summary, description, acceptance }) {
   const caseIds   = [];
   const createdBy = await getDefaultCreatedBy();
 
-  for (const tc of testCases) {
-    const id = uuid();
+  for (let i = 0; i < testCases.length; i++) {
+    const tc   = testCases[i];
+    const id   = uuid();
+    const code = generateCaseCode(key, i);
     try {
       const descText = (tc.gherkin_text || '').slice(0, 3000);
       await db.execute(
         `INSERT INTO test_cases
-           (id, title, description, preconditions, priority, automation_status, project_id, status, created_by, jira_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, tc.title, descText, tc.preconditions || '', tc.priority || 'medium', 'not_automated', projectId, 'draft', createdBy, key]
+           (id, code, title, description, preconditions, priority, automation_status, project_id, status, created_by, jira_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, code, tc.title, descText, tc.preconditions || '', tc.priority || 'medium', 'not_automated', projectId, 'draft', createdBy, key]
       );
-      console.log(`[JIRA] ✅ Caso inserido: ${tc.title}`);
+      console.log(`[JIRA] Caso inserido: ${code} - ${tc.title}`);
       caseIds.push(id);
 
       for (const step of (tc.steps || [])) {
@@ -93,7 +121,7 @@ async function handleStoryCreated({ key, summary, description, acceptance }) {
         );
       }
     } catch (e) {
-      console.error(`[JIRA] ❌ ERRO ao inserir caso: ${e.message}`);
+      console.error(`[JIRA] ERRO ao inserir caso: ${e.message}`);
     }
   }
 
@@ -112,15 +140,14 @@ async function handleStoryCreated({ key, summary, description, acceptance }) {
 
   (async () => {
     try {
-      console.log(`[JIRA BACKGROUND] Aguardando 30s para atualizar ${key}...`);
       await new Promise(r => setTimeout(r, 30000));
       await jiraService.setTestHubFields(key, { gherkinGenerated: true });
       await jiraService.addComment(key,
         `TestHub gerou ${caseIds.length} cenarios de teste automaticamente.\nVer em: ${process.env.FRONTEND_URL}/test-cases?jira=${key}`
       );
-      console.log(`[JIRA BACKGROUND] ✅ ${key} atualizado`);
+      console.log(`[JIRA BACKGROUND] ${key} atualizado`);
     } catch (err) {
-      console.error(`[JIRA BACKGROUND] ❌ Erro ao atualizar ${key}:`, err.message);
+      console.error(`[JIRA BACKGROUND] Erro ao atualizar ${key}:`, err.message);
     }
   })();
 
@@ -140,7 +167,7 @@ async function handleStoryDeleted(key) {
     [key]
   );
   await db.execute('UPDATE jira_links SET deleted_at = NOW() WHERE jira_key = ?', [key]);
-  console.log(`[JIRA] Story deletada: ${key} — casos deprecados`);
+  console.log(`[JIRA] Story deletada: ${key} - casos deprecados`);
 }
 
 async function syncExecutionToJira(req, res) {
@@ -237,30 +264,6 @@ async function listLinks(req, res) {
   res.json(rows);
 }
 
-function extractDescription(descField) {
-  if (!descField) return '';
-  if (typeof descField === 'string') return descField;
-  try {
-    return descField.content?.flatMap(b => b.content || [])?.filter(n => n.type === 'text')?.map(n => n.text)?.join(' ') || '';
-  } catch { return ''; }
-}
-
-function extractJiraKey(text) {
-  if (!text) return null;
-  const match = text.match(/([A-Z]+-\d+)/);
-  return match ? match[1] : null;
-}
-
-async function getSquadEmails(squadId) {
-  if (!squadId) return [];
-  const [rows] = await db.execute(
-    `SELECT u.email FROM users u JOIN squad_members sm ON u.id = sm.user_id WHERE sm.squad_id = ?`,
-    [squadId]
-  );
-  return rows.map(r => r.email);
-}
-
-
 async function saveCases(req, res) {
   const { jiraKey, summary, gherkinJson, projectId, squadId } = req.body;
   if (!jiraKey || !gherkinJson || !projectId) {
@@ -271,13 +274,15 @@ async function saveCases(req, res) {
     const testCases = gherkinService.gherkinToTestCases({ gherkinJson, projectId, squadId, jiraKey });
     const caseIds   = [];
 
-    for (const tc of testCases) {
-      const id = uuid();
+    for (let i = 0; i < testCases.length; i++) {
+      const tc   = testCases[i];
+      const id   = uuid();
+      const code = generateCaseCode(jiraKey, i);
       try {
         await db.execute(
-          `INSERT INTO test_cases (id, title, description, preconditions, priority, automation_status, project_id, status, created_by, jira_key)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, tc.title, (tc.gherkin_text || '').slice(0, 3000), tc.preconditions || '', tc.priority || 'medium', 'not_automated', projectId, 'draft', createdBy, jiraKey]
+          `INSERT INTO test_cases (id, code, title, description, preconditions, priority, automation_status, project_id, status, created_by, jira_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, code, tc.title, (tc.gherkin_text || '').slice(0, 3000), tc.preconditions || '', tc.priority || 'medium', 'not_automated', projectId, 'draft', createdBy, jiraKey]
         );
         caseIds.push(id);
         for (const step of (tc.steps || [])) {
@@ -304,8 +309,21 @@ async function saveCases(req, res) {
   }
 }
 
-module.exports = { handleWebhook, saveCases, syncExecutionToJira, syncCycleToJira, generateGherkinManual, listLinks };
-// Adicionar antes do module.exports no jiraController.js:
+function extractDescription(descField) {
+  if (!descField) return '';
+  if (typeof descField === 'string') return descField;
+  try {
+    return descField.content?.flatMap(b => b.content || [])?.filter(n => n.type === 'text')?.map(n => n.text)?.join(' ') || '';
+  } catch { return ''; }
+}
 
-// ── Salvar casos gerados manualmente ─────────────────────────
-// router.post('/jira/save-cases', auth, saveCases) — adicionar no routes/index.js
+async function getSquadEmails(squadId) {
+  if (!squadId) return [];
+  const [rows] = await db.execute(
+    `SELECT u.email FROM users u JOIN squad_members sm ON u.id = sm.user_id WHERE sm.squad_id = ?`,
+    [squadId]
+  );
+  return rows.map(r => r.email);
+}
+
+module.exports = { handleWebhook, saveCases, syncExecutionToJira, syncCycleToJira, generateGherkinManual, listLinks };

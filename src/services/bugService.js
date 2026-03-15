@@ -62,33 +62,37 @@ async function createBugFromExecution(executionId) {
     }
   }
 
-  try {
-    bug = await jiraService.createIssue({
+  // No Jira free, Bug nao pode ser filho de Story � cria sem parentKey
+  const labelsArr = ['testhub-auto', 'qa-failure', `squad-${exec.squad_name?.toLowerCase().replace(/\s+/g, '-')}`];
+
+  const tryCreate = async (issueType, withParent) => {
+    return jiraService.createIssue({
       summary:     bugSummary,
       description: bugDescription,
-      issueType:   issueTypeToUse,
-      parentKey:   parentKeyToUse,
-      labels:      ['testhub-auto', 'qa-failure', `squad-${exec.squad_name?.toLowerCase().replace(/\s+/g,'-')}`],
+      issueType,
+      parentKey:   withParent ? parentKeyToUse : undefined,
+      labels:      labelsArr,
     });
-  } catch (err) {
-    // Se falhar com 400 tipo inválido, tenta "Task"
-    if (err.response?.status === 400 && issueTypeToUse === 'Bug') {
-      console.warn('[BUG] Tipo "Bug" não encontrado, tentando "Task"...');
-      try {
-        bug = await jiraService.createIssue({
-          summary:     bugSummary,
-          description: bugDescription,
-          issueType:   'Task',
-          parentKey:   parentKeyToUse,
-          labels:      ['testhub-auto', 'qa-failure', `squad-${exec.squad_name?.toLowerCase().replace(/\s+/g,'-')}`],
-        });
-      } catch (err2) {
-        throw new Error(`Falha ao criar issue no Jira (tentou Bug e Task): ${err2.response?.data?.errorMessages?.[0] || err2.message}`);
-      }
-    } else {
-      throw err;
+  };
+
+  // Tenta: Bug sem parent -> Task sem parent
+  const attempts = [
+    () => tryCreate('Bug',  false),
+    () => tryCreate('Task', false),
+    () => tryCreate('Story', false),
+  ];
+
+  let lastErr;
+  for (const attempt of attempts) {
+    try {
+      bug = await attempt();
+      break;
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[BUG] Tentativa falhou: ${err.message}`);
     }
   }
+  if (!bug) throw new Error(`Falha ao criar issue no Jira: ${lastErr?.message}`);
 
   // Salva vínculo no banco
   const bugLinkId = uuid();
@@ -135,7 +139,7 @@ async function processBugResolved(jiraBugKey, jiraStatus) {
     JOIN test_cases tc ON tc.id = bl.test_case_id
     JOIN test_cycles cy ON cy.id = bl.cycle_id
     JOIN squads s ON s.id = bl.squad_id
-    WHERE bl.jira_bug_key = ? AND bl.status = 'open'
+    WHERE bl.jira_bug_key = ? AND bl.status NOT IN ('retest_pending', 'closed')
   `, [jiraBugKey]);
 
   if (!links.length) return;
@@ -344,3 +348,5 @@ async function listBugs({ squadId, cycleId, status } = {}) {
 }
 
 module.exports = { createBugFromExecution, processBugResolved, listBugs };
+
+
