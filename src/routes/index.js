@@ -66,6 +66,8 @@ router.put ('/executions/:id', auth, executionsCtrl.update);
 // Reports
 router.get('/reports/dashboard',      auth, reportsCtrl.dashboard);
 router.get('/reports/cycle/:cycleId', auth, reportsCtrl.byCycle);
+router.get('/reports/bugs',                    auth, reportsCtrl.bugs);
+router.get('/reports/execution-progress',    auth, reportsCtrl.executionProgress);
 router.get('/reports/squad/:squadId', auth, reportsCtrl.bySquad);
 
 
@@ -82,6 +84,14 @@ router.post('/jira/sync/cycle/:cycleId', auth,  jiraCtrl.syncCycleToJira);
 const ghAuth = require('../controllers/githubAuthController');
 router.get('/jira/github-auth',        ghAuth.startAuth);
 router.get('/jira/github-auth/status', ghAuth.checkStatus);
+
+// Bugs
+const bugCtrl = require('../controllers/bugController');
+router.get('/bugs',                              auth, bugCtrl.listBugs);
+router.post('/bugs/from-execution/:executionId', auth, bugCtrl.createFromExecution);
+
 module.exports = router;
+
+
 
 

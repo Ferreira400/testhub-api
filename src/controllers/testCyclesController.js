@@ -1,6 +1,16 @@
 const db = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 
+async function getDbUserId(reqUser) {
+  // Busca o ID real do usuario no banco pelo email (compativel com Keycloak e login local)
+  const [rows] = await db.query('SELECT id FROM users WHERE email = ? LIMIT 1', [reqUser.email]);
+  if (rows.length) return rows[0].id;
+  // Fallback: primeiro usuario do banco
+  const [all] = await db.query('SELECT id FROM users LIMIT 1');
+  if (all.length) return all[0].id;
+  throw new Error('Nenhum usuario encontrado no banco');
+}
+
 exports.list = async (req, res) => {
   try {
     const { plan_id } = req.query;
@@ -11,7 +21,10 @@ exports.list = async (req, res) => {
     sql += ' ORDER BY tc.created_at DESC';
     const [rows] = await db.query(sql, params);
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('[CYCLES] ERRO list:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 };
 
 exports.getById = async (req, res) => {
@@ -30,7 +43,10 @@ exports.getById = async (req, res) => {
       WHERE tcc.cycle_id = ? ORDER BY tcc.order_index
     `, [req.params.id]);
     res.json({ ...cycle[0], cases });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('[CYCLES] ERRO getById:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 };
 
 exports.create = async (req, res) => {
@@ -44,9 +60,11 @@ exports.create = async (req, res) => {
 
     if (!name) return res.status(400).json({ error: 'name e obrigatorio' });
 
+    // Busca ID real do usuario no banco
+    const userId = await getDbUserId(req.user);
+
     let resolvedPlanId = plan_id;
 
-    // Se nao tem plan_id mas tem project_id e squad_id, cria um plano automaticamente
     if (!resolvedPlanId) {
       if (!project_id || !squad_id)
         return res.status(400).json({
@@ -59,15 +77,12 @@ exports.create = async (req, res) => {
          VALUES (?,?,?,?,?,?,?)`,
         [resolvedPlanId, project_id, squad_id,
          'Plano - ' + name, description || null,
-         req.user.id, req.user.id]
+         userId, userId]
       );
     } else {
-      // Valida se plan_id existe
       const [plan] = await db.query('SELECT id FROM test_plans WHERE id = ?', [resolvedPlanId]);
       if (!plan.length)
-        return res.status(400).json({
-          error: 'plan_id nao encontrado. Use project_id + squad_id para criar automaticamente.'
-        });
+        return res.status(400).json({ error: 'plan_id nao encontrado.' });
     }
 
     const id = uuidv4();
@@ -77,7 +92,7 @@ exports.create = async (req, res) => {
        VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [id, resolvedPlanId, name, description || null, environment || null,
        build_version || null, start_date || null, end_date || null,
-       assigned_to || null, req.user.id]
+       assigned_to || null, userId]
     );
 
     if (case_ids.length) {
@@ -89,7 +104,10 @@ exports.create = async (req, res) => {
     }
 
     res.status(201).json({ message: 'Ciclo criado', id, plan_id: resolvedPlanId });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('[CYCLES] ERRO create:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 };
 
 exports.update = async (req, res) => {
@@ -105,5 +123,8 @@ exports.update = async (req, res) => {
       [name, description, status, environment, build_version, start_date, end_date, req.params.id]
     );
     res.json({ message: 'Ciclo atualizado' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('[CYCLES] ERRO update:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 };

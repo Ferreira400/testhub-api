@@ -26,6 +26,18 @@ async function handleWebhook(req, res) {
       await handleStoryCreated({ key, summary, description, acceptance });
     }
     if (webhookEvent === 'jira:issue_updated') {
+        if (webhookEvent === 'jira:issue_updated') {
+  // Verifica se é um Bug sendo resolvido
+  if (issueType === 'Bug') {
+    const status = issue.fields?.status?.name || '';
+    const { handleBugResolved } = require('./bugController');
+    await handleBugResolved(key, status);
+    return;
+  }
+  await handleStoryUpdated({ key, summary, description, issue });
+}
+
+
       await handleStoryUpdated({ key, summary, issue });
     }
     if (webhookEvent === 'jira:issue_deleted') {
