@@ -222,3 +222,88 @@ exports.executionProgress = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// GET /reports/bugs-by-sprint?squad_id=&project_id=
+exports.bugsBySprint = async (req, res) => {
+  const { squad_id, project_id } = req.query;
+  try {
+    const cycleFilter  = project_id ? 'AND tp.project_id = ?'        : '';
+    const cycleParams  = project_id ? [project_id]                   : [];
+    const squadFilter  = squad_id   ? 'AND bl.squad_id = ?'          : '';
+    const squadParams  = squad_id   ? [squad_id]                     : [];
+
+    const [byCycle] = await db.query(`
+      SELECT
+        cy.id AS cycle_id, cy.name AS cycle_name,
+        cy.environment, cy.build_version, cy.created_at,
+        COUNT(bl.id)                                                                      AS total_bugs,
+        SUM(bl.status = 'open')                                                           AS open,
+        SUM(bl.status = 'in_progress')                                                    AS in_progress,
+        SUM(bl.status = 'resolved')                                                       AS resolved,
+        SUM(bl.status = 'closed')                                                         AS closed,
+        SUM(bl.status = 'retest_pending')                                                 AS retest_pending,
+        ROUND(SUM(bl.status IN ('resolved','closed')) / NULLIF(COUNT(bl.id),0) * 100, 1) AS resolution_rate,
+        ROUND(AVG(TIMESTAMPDIFF(HOUR, bl.created_at, bl.resolved_at)), 1)                AS avg_resolution_hours
+      FROM bug_links bl
+      JOIN test_cycles cy ON cy.id = bl.cycle_id
+      JOIN test_plans tp  ON tp.id = cy.plan_id
+      WHERE 1=1 ${cycleFilter} ${squadFilter}
+      GROUP BY cy.id ORDER BY cy.created_at DESC LIMIT 20
+    `, [...cycleParams, ...squadParams]);
+
+    const [criticalOpen] = await db.query(`
+      SELECT bl.jira_bug_key, bl.status, bl.created_at,
+        tc.code AS case_code, tc.title AS case_title, tc.priority,
+        cy.name AS cycle_name, s.name AS squad_name,
+        TIMESTAMPDIFF(HOUR, bl.created_at, NOW()) AS age_hours
+      FROM bug_links bl
+      JOIN test_cases tc  ON tc.id = bl.test_case_id
+      JOIN test_cycles cy ON cy.id = bl.cycle_id
+      JOIN squads s       ON s.id  = bl.squad_id
+      WHERE bl.status IN ('open','in_progress')
+        AND tc.priority IN ('critical','high')
+        ${squad_id ? 'AND bl.squad_id = ?' : ''}
+      ORDER BY tc.priority DESC, bl.created_at ASC LIMIT 20
+    `, squadParams);
+
+    const [trend] = await db.query(`
+      SELECT DATE(bl.created_at) AS date, COUNT(*) AS opened
+      FROM bug_links bl
+      WHERE bl.created_at >= DATE_SUB(NOW(), INTERVAL 60 DAY)
+        ${squadFilter}
+      GROUP BY DATE(bl.created_at) ORDER BY date ASC
+    `, squadParams);
+
+    const [global] = await db.query(`
+      SELECT
+        COUNT(*)                                                              AS total,
+        SUM(bl.status IN ('open','in_progress'))                             AS open,
+        SUM(bl.status IN ('resolved','closed'))                              AS resolved,
+        SUM(bl.status = 'retest_pending')                                    AS retest_pending,
+        ROUND(SUM(bl.status IN ('resolved','closed'))/NULLIF(COUNT(*),0)*100,1) AS resolution_rate,
+        ROUND(AVG(TIMESTAMPDIFF(HOUR, bl.created_at, bl.resolved_at)),1)    AS avg_resolution_hours,
+        SUM(tc.priority = 'critical' AND bl.status IN ('open','in_progress')) AS critical_open,
+        SUM(tc.priority = 'high'     AND bl.status IN ('open','in_progress')) AS high_open
+      FROM bug_links bl
+      JOIN test_cases tc ON tc.id = bl.test_case_id
+      WHERE 1=1 ${squadFilter}
+    `, squadParams);
+
+    const [topCases] = await db.query(`
+      SELECT tc.code, tc.title, tc.priority, tc.jira_key,
+        COUNT(bl.id)                             AS bug_count,
+        SUM(bl.status IN ('open','in_progress')) AS open_count,
+        MAX(bl.created_at)                       AS last_bug,
+        GROUP_CONCAT(DISTINCT bl.jira_bug_key ORDER BY bl.created_at DESC SEPARATOR ',') AS bug_keys
+      FROM bug_links bl
+      JOIN test_cases tc ON tc.id = bl.test_case_id
+      WHERE 1=1 ${squadFilter}
+      GROUP BY bl.test_case_id ORDER BY bug_count DESC LIMIT 10
+    `, squadParams);
+
+    res.json({ global: global[0], by_cycle: byCycle, critical_open: criticalOpen, trend, top_cases: topCases });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+

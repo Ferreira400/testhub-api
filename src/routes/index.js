@@ -67,6 +67,7 @@ router.put ('/executions/:id', auth, executionsCtrl.update);
 router.get('/reports/dashboard',      auth, reportsCtrl.dashboard);
 router.get('/reports/cycle/:cycleId', auth, reportsCtrl.byCycle);
 router.get('/reports/bugs',                    auth, reportsCtrl.bugs);
+router.get('/reports/bugs-by-sprint',       auth, reportsCtrl.bugsBySprint);
 router.get('/reports/execution-progress',    auth, reportsCtrl.executionProgress);
 router.get('/reports/squad/:squadId', auth, reportsCtrl.bySquad);
 
@@ -92,6 +93,7 @@ router.patch('/bugs/:id',                        auth, bugCtrl.updateBugStatus);
 router.post('/bugs/from-execution/:executionId', auth, bugCtrl.createFromExecution);
 
 module.exports = router;
+
 
 
 
