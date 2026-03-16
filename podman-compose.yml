@@ -1,0 +1,83 @@
+version: "3.9"
+
+# =============================================================
+#  TestHub — Keycloak SSO Stack
+#  Subir: podman-compose up -d
+#  Parar:  podman-compose down
+# =============================================================
+
+services:
+
+  # ── PostgreSQL (banco dedicado para o Keycloak) ────────────
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: testhub-keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       keycloak
+      POSTGRES_USER:     keycloak
+      POSTGRES_PASSWORD: keycloak_secret
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    networks:
+      - testhub-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Keycloak 24 ────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: testhub-keycloak
+    restart: unless-stopped
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    command:
+      - start-dev                        # trocar por "start" em produção
+      - --import-realm                   # importa realm.json ao iniciar
+    environment:
+      # Admin inicial
+      KEYCLOAK_ADMIN:          admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+
+      # Banco
+      KC_DB:                   postgres
+      KC_DB_URL:               jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME:          keycloak
+      KC_DB_PASSWORD:          keycloak_secret
+
+      # Rede
+      KC_HOSTNAME:             localhost
+      KC_HOSTNAME_PORT:        8080
+      KC_HOSTNAME_STRICT:      "false"
+      KC_HTTP_ENABLED:         "true"
+
+      # Features habilitadas
+      KC_FEATURES:             token-exchange,admin-fine-grained-authz
+
+      # Logs
+      KC_LOG_LEVEL:            INFO
+
+    ports:
+      - "8080:8080"     # Console admin:  http://localhost:8080
+      - "8443:8443"     # HTTPS (se habilitar TLS)
+    volumes:
+      - ./testhub-realm.json:/opt/keycloak/data/import/testhub-realm.json:ro
+    networks:
+      - testhub-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  keycloak-db-data:
+
+networks:
+  testhub-net:
+    driver: bridge

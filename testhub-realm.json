@@ -1,0 +1,359 @@
+{
+  "realm": "testhub",
+  "displayName": "TestHub SSO",
+  "displayNameHtml": "<b>TestHub</b> — Plataforma de Testes",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "defaultSignatureAlgorithm": "RS256",
+  "accessTokenLifespan": 28800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionMaxLifespan": 2592000,
+  "refreshTokenMaxReuse": 0,
+  "passwordPolicy": "length(8) and upperCase(1) and lowerCase(1) and digits(1) and notUsername(undefined) and passwordHistory(3)",
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Administrador total do TestHub — acesso irrestrito",
+        "composite": false
+      },
+      {
+        "name": "manager",
+        "description": "Gerente de QA — cria projetos, ciclos e relatórios",
+        "composite": false
+      },
+      {
+        "name": "qa_engineer",
+        "description": "QA Engineer — cria e executa casos de teste",
+        "composite": false
+      },
+      {
+        "name": "viewer",
+        "description": "Somente leitura — visualiza relatórios e casos",
+        "composite": false
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "testhub-admins",
+      "path": "/testhub-admins",
+      "realmRoles": [
+        "admin"
+      ],
+      "attributes": {
+        "description": [
+          "Grupo de administradores do TestHub"
+        ]
+      }
+    },
+    {
+      "name": "testhub-managers",
+      "path": "/testhub-managers",
+      "realmRoles": [
+        "manager"
+      ],
+      "attributes": {
+        "description": [
+          "Gerentes de QA"
+        ]
+      }
+    },
+    {
+      "name": "testhub-engineers",
+      "path": "/testhub-engineers",
+      "realmRoles": [
+        "qa_engineer"
+      ],
+      "attributes": {
+        "description": [
+          "QA Engineers"
+        ]
+      }
+    },
+    {
+      "name": "testhub-viewers",
+      "path": "/testhub-viewers",
+      "realmRoles": [
+        "viewer"
+      ],
+      "attributes": {
+        "description": [
+          "Leitura apenas"
+        ]
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "testhub-frontend",
+      "name": "TestHub Frontend (SPA)",
+      "description": "Cliente público — React SPA com PKCE",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:5173",
+      "baseUrl": "http://localhost:5173",
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles",
+        "testhub-roles"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ]
+    },
+    {
+      "clientId": "testhub-api",
+      "name": "TestHub Backend API",
+      "description": "Cliente confidencial — Node.js backend para validação de tokens e Admin API",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "secret": "testhub-api-secret-change-in-prod",
+      "attributes": {
+        "use.refresh.tokens": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ]
+    },
+    {
+      "clientId": "testhub-admin-cli",
+      "name": "TestHub Admin CLI",
+      "description": "Cliente para operações administrativas via scripts",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "secret": "testhub-cli-secret-change-in-prod"
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "testhub-roles",
+      "description": "Mapeia roles do TestHub para o token JWT",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "groups-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        },
+        {
+          "name": "squad-attribute-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "squad_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "squad_id",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "name": "openid",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@testhub.io",
+      "email": "admin@testhub.io",
+      "firstName": "Admin",
+      "lastName": "TestHub",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": [
+        "admin"
+      ],
+      "groups": [
+        "/testhub-admins"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@123",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "squad_id": []
+      }
+    },
+    {
+      "username": "manager@testhub.io",
+      "email": "manager@testhub.io",
+      "firstName": "Gerente",
+      "lastName": "QA",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": [
+        "manager"
+      ],
+      "groups": [
+        "/testhub-managers"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Manager@123",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "squad_id": []
+      }
+    },
+    {
+      "username": "qa@testhub.io",
+      "email": "qa@testhub.io",
+      "firstName": "QA",
+      "lastName": "Engineer",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": [
+        "qa_engineer"
+      ],
+      "groups": [
+        "/testhub-engineers"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Engineer@123",
+          "temporary": false
+        }
+      ],
+      "attributes": {
+        "squad_id": []
+      }
+    }
+  ],
+  "identityProviders": [],
+  "authenticationFlows": [],
+  "smtpServer": {
+    "host": "",
+    "port": "587",
+    "from": "noreply@testhub.io",
+    "fromDisplayName": "TestHub SSO",
+    "ssl": "false",
+    "starttls": "true",
+    "auth": "false"
+  },
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "REGISTER",
+    "UPDATE_PASSWORD",
+    "UPDATE_PASSWORD_ERROR",
+    "RESET_PASSWORD",
+    "RESET_PASSWORD_ERROR",
+    "UPDATE_PROFILE",
+    "UPDATE_PROFILE_ERROR",
+    "TOKEN_EXCHANGE",
+    "REFRESH_TOKEN",
+    "CLIENT_LOGIN",
+    "CLIENT_LOGIN_ERROR",
+    "USER_INFO_REQUEST"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true
+}
