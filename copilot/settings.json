@@ -1,0 +1,55 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "files.encoding": "utf8",
+  "files.eol": "\n",
+
+  "github.copilot.enable": {
+    "*": true,
+    "javascript": true,
+    "javascriptreact": true,
+    "sql": true
+  },
+
+  "github.copilot.chat.codeGeneration.instructions": [
+    {
+      "text": "Este projeto é o TestHub — plataforma QA com Node.js/Express + MySQL + React/Vite + Keycloak SSO. Sempre siga os padrões do projeto: use CSS variables para estilos, registre rotas em routes/index.js, use async/await com try/catch, e o campo business_unit_id é obrigatório em test_cases."
+    }
+  ],
+
+  "github.copilot.chat.testGeneration.instructions": [
+    {
+      "text": "Gere testes no formato Gherkin (Given/When/Then) compatíveis com o TestHub. Use a estrutura: Feature, Scenario, Given, When, Then, And."
+    }
+  ],
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.git": true
+  },
+
+  "files.associations": {
+    "*.jsx": "javascriptreact"
+  },
+
+  "emmet.includeLanguages": {
+    "javascript": "javascriptreact"
+  },
+
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+
+  "workbench.colorCustomizations": {
+    "titleBar.activeBackground": "#1A2E44",
+    "titleBar.activeForeground": "#FFFFFF"
+  }
+}

@@ -1,0 +1,145 @@
+### TestHub API — REST Client
+### Instale a extensão "REST Client" no VS Code para usar este arquivo
+### Clique em "Send Request" acima de cada requisição
+
+@baseUrl = http://localhost:3001/api
+@token = SEU_TOKEN_AQUI
+
+### ── AUTH ──────────────────────────────────────────────────
+
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@testhub.io",
+  "password": "Admin@123"
+}
+
+###
+
+# Copie o token do login acima e cole em @token
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### ── HEALTH ─────────────────────────────────────────────────
+
+GET http://localhost:3001/health
+
+### ── SQUADS ─────────────────────────────────────────────────
+
+GET {{baseUrl}}/squads
+Authorization: Bearer {{token}}
+
+###
+
+POST {{baseUrl}}/squads
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Squad Teste",
+  "description": "Squad criada via REST Client",
+  "color_hex": "#4F7CFF"
+}
+
+### ── PROJETOS ────────────────────────────────────────────────
+
+GET {{baseUrl}}/projects
+Authorization: Bearer {{token}}
+
+### ── CASOS DE TESTE ─────────────────────────────────────────
+
+GET {{baseUrl}}/test-cases
+Authorization: Bearer {{token}}
+
+###
+
+POST {{baseUrl}}/test-cases
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "project_id": "SEU_PROJECT_ID",
+  "title": "Login com credenciais válidas",
+  "type": "manual",
+  "priority": "high",
+  "business_unit_id": "SEU_BUSINESS_UNIT_ID",
+  "preconditions": "Usuário cadastrado no sistema",
+  "steps": [
+    { "action": "Acessar página de login", "expected_result": "Página exibida" },
+    { "action": "Inserir email e senha", "expected_result": "Campos preenchidos" },
+    { "action": "Clicar em Entrar", "expected_result": "Redirecionado ao Dashboard" }
+  ]
+}
+
+### ── EXECUÇÕES ───────────────────────────────────────────────
+
+GET {{baseUrl}}/executions
+Authorization: Bearer {{token}}
+
+###
+
+POST {{baseUrl}}/executions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "test_case_id": "SEU_TEST_CASE_ID",
+  "cycle_id": "SEU_CYCLE_ID",
+  "status": "passed",
+  "duration_seconds": 120,
+  "comments": "Executado com sucesso"
+}
+
+### ── BUGS ────────────────────────────────────────────────────
+
+GET {{baseUrl}}/bugs
+Authorization: Bearer {{token}}
+
+### ── BUSINESS UNITS ─────────────────────────────────────────
+
+GET {{baseUrl}}/business-units
+Authorization: Bearer {{token}}
+
+###
+
+POST {{baseUrl}}/business-units
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "capacidade": "Produtos",
+  "dominio": "Credito",
+  "sub_dominio": "Financiamento",
+  "produto": "Veiculos",
+  "aplicacao": "Rover",
+  "processo_negocio": "captura de proposta, formalizacao",
+  "impacto": "medio",
+  "componentes": "api--veiculos, api--consignado"
+}
+
+### ── COBERTURA ───────────────────────────────────────────────
+
+GET {{baseUrl}}/coverage/business-units
+Authorization: Bearer {{token}}
+
+### ── RELATÓRIOS ─────────────────────────────────────────────
+
+GET {{baseUrl}}/reports/dashboard
+Authorization: Bearer {{token}}
+
+###
+
+GET {{baseUrl}}/reports/bugs-by-sprint
+Authorization: Bearer {{token}}
+
+### ── JIRA ────────────────────────────────────────────────────
+
+GET {{baseUrl}}/jira/links
+Authorization: Bearer {{token}}
+
+###
+
+GET {{baseUrl}}/jira/generate/TH-1
+Authorization: Bearer {{token}}
