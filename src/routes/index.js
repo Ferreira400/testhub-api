@@ -92,7 +92,21 @@ router.get('/bugs',                              auth, bugCtrl.listBugs);
 router.patch('/bugs/:id',                        auth, bugCtrl.updateBugStatus);
 router.post('/bugs/from-execution/:executionId', auth, bugCtrl.createFromExecution);
 
+// Business Units
+const buCtrl = require('../controllers/businessUnitsController')
+router.get   ('/business-units',         auth, buCtrl.list)
+router.get   ('/business-units/filters', auth, buCtrl.filters)
+router.get   ('/business-units/:id',     auth, buCtrl.getById)
+router.post  ('/business-units',         auth, buCtrl.create)
+router.put   ('/business-units/:id',     auth, buCtrl.update)
+router.delete('/business-units/:id',     auth, buCtrl.remove)
+
+// Coverage
+const coverageCtrl = require('../controllers/coverageController')
+router.get('/coverage/business-units', auth, coverageCtrl.coverageReport)
+
 module.exports = router;
+
 
 
 

@@ -56,7 +56,7 @@ exports.create = async (req, res) => {
   const {
     project_id, suite_id, title, description, preconditions, postconditions,
     type = 'manual', priority = 'medium', estimated_duration_min,
-    assigned_to, steps = []
+    assigned_to, steps = [], business_unit_id
   } = req.body;
 
   if (!project_id || !title || !type)
@@ -68,11 +68,11 @@ exports.create = async (req, res) => {
   await db.query(
     `INSERT INTO test_cases
      (id, project_id, suite_id, code, title, description, preconditions, postconditions,
-      type, priority, estimated_duration_min, assigned_to, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      type, priority, estimated_duration_min, assigned_to, created_by, business_unit_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, project_id, suite_id || null, code, title, description || null,
      preconditions || null, postconditions || null, type, priority,
-     estimated_duration_min || null, assigned_to || null, req.user.id]
+     estimated_duration_min || null, assigned_to || null, req.user.id, business_unit_id || null]
   );
 
   // Insere steps
@@ -126,3 +126,4 @@ exports.remove = async (req, res) => {
   await db.query('UPDATE test_cases SET status = "deprecated" WHERE id = ?', [req.params.id]);
   res.json({ message: 'Caso de teste removido' });
 };
+

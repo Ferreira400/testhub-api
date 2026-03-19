@@ -8,6 +8,7 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use('/api/coverage', require('./routes/coverageRoutes'))
 
 // Wrap async route handlers — captura erros e passa para o handler global
 const asyncHandler = fn => (req, res, next) =>
