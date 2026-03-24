@@ -32,10 +32,10 @@ router.post('/auth/login',    loginLimiter,    authValidators.login,    authCtrl
 router.get ('/auth/me',       auth, authCtrl.me);
 
 // Users
-router.get   ('/users',     auth, usersCtrl.list);
-router.get   ('/users/:id', auth, usersCtrl.getById);
-router.put   ('/users/:id', auth, usersCtrl.update);
-router.delete('/users/:id', auth, usersCtrl.remove);
+router.get   ('/users',     auth, paginationValidator, usersCtrl.list);
+router.get   ('/users/:id', auth, uuidValidator, usersCtrl.getById);
+router.put   ('/users/:id', auth, uuidValidator, usersCtrl.update);
+router.delete('/users/:id', auth, uuidValidator, usersCtrl.remove);
 
 // Squads
 router.get   ('/squads',                     auth, squadsCtrl.list);
