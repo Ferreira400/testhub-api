@@ -276,3 +276,96 @@ podman exec testhub-mysql mysql -u root -padm -e "SELECT COUNT(*) FROM test_case
 | `401 Unauthorized` | Token Keycloak com ID diferente do banco | Atualizar ID do usuário no banco com `SET FOREIGN_KEY_CHECKS=0` |
 | `EBUSY locked` | Arquivo aberto pelo PowerShell | Fechar terminal e reabrir |
 | `Position: fixed não funciona` | Modal dentro de elemento com transform | Usar `position: fixed` com `inset: 0` e `zIndex: 9999` |
+
+---
+
+## SECURITY IMPROVEMENTS — IMPLEMENTADAS (v1.0.5)
+
+### Commit: `85813bd` — Validação, Rate Limiting e CORS
+
+#### Novos Arquivos Criados:
+1. **`src/utils/validators.js`** — Centralização de regras de validação com express-validator
+   - `authValidators.register` — Valida nome, email, senha (min 6, maiúscula, minúscula)
+   - `authValidators.login` — Valida email e senha
+   - `uuidValidator` — Valida UUIDs em params
+   - `paginationValidator` — Valida page e limit em queries
+   - `squadsValidators`, `projectsValidators`, etc. — Por domínio
+   - Middleware `handleValidationErrors` — Centraliza tratamento de erros
+
+2. **`src/middlewares/security.js`** — Middlewares de segurança e proteção
+   - `globalLimiter` — 100 req/15min por IP (aplica em `/api` globalmente)
+   - `loginLimiter` — 5 tentativas/15min (skipSuccessfulRequests: true)
+   - `registerLimiter` — 3 registros/hora por IP
+   - `writeLimiter` — 30 ops/min (POST, PUT, DELETE, PATCH)
+   - `corsOptions` — Allow-list configurável por NODE_ENV
+     * Dev: aceita todas as origens (localhost:3000, localhost:5173, 127.0.0.1)
+     * Prod: via variáveis `FRONTEND_URL` e `FRONTEND_URL_DEV`
+   - `verifyJiraWebhookSignature` — Valida HMAC-SHA256 do webhook Jira (X-Atlassian-Webhook-Signature)
+   - `securityHeaders` — Headers de proteção (X-Frame-Options, CSP, X-XSS-Protection, etc.)
+
+#### Modificações em Arquivos Existentes:
+
+**`src/server.js`**:
+```javascript
+// Adicionado após require('dotenv')
+const { corsOptions, globalLimiter, securityHeaders } = require('./middlewares/security')
+
+// Aplicado na sequência correta:
+app.use(securityHeaders)     // Headers primeiro
+app.use(globalLimiter)       // Rate limit global
+app.use(cors(corsOptions))   // CORS restritivo
+app.use(express.json({       // Body parser com capture de rawBody para Jira
+  verify: (req, res, buf, encoding) => {
+    req.rawBody = buf.toString(encoding || 'utf8')
+  }
+}))
+
+// Error handler melhorado:
+// - Diferencia erros MySQL vs validacao vs genérico
+// - Mascara stack trace em produção (NODE_ENV !== 'development')
+// - Logs estruturados com timestamp
+```
+
+**`src/routes/index.js`**:
+```javascript
+// Imports adicionados
+const { loginLimiter, registerLimiter, verifyJiraWebhookSignature } = require('../middlewares/security')
+const { authValidators, squadsValidators, projectsValidators, ... } = require('../utils/validators')
+
+// Auth com validação e rate limiting
+router.post('/auth/register', registerLimiter, authValidators.register, authCtrl.register)
+router.post('/auth/login',    loginLimiter,    authValidators.login,    authCtrl.login)
+
+// Jira webhook PROTEGIDO
+router.post('/jira/webhook', verifyJiraWebhookSignature, jiraCtrl.handleWebhook)
+```
+
+#### Variáveis de Ambiente Adicionadas (.env):
+```
+# Security
+NODE_ENV=development|production
+
+# CORS configurável
+FRONTEND_URL=https://testhub.producao.com
+FRONTEND_URL_DEV=https://testhub-staging.com
+
+# Jira Webhook Secret (gerar com: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+JIRA_WEBHOOK_SECRET=<seu-secret-aleatorio-64-chars>
+```
+
+#### Impacto & Comportamento:
+✅ **Auth routes** — Protegidas contra brute force (max 5 tentativas login / 3 registros por hora)
+✅ **Jira webhook** — Rejeita requisições sem assinatura válida (HMAC-SHA256)
+✅ **CORS** — Apenas origins da allow-list conseguem fazer requisições
+✅ **Validação** — Email, senha, UUIDs validados antes de chegar no controller
+✅ **Error messages** — Detalhes completos em dev, mensagens simples em prod
+✅ **Performance** — Rate limiting evita DDoS e force brute attacks
+
+#### Próximas Implementações (v1.0.6):
+- [ ] Adicionar try-catch em TODOS os controllers
+- [ ] Repository Pattern para abstrair DB
+- [ ] Testes unitários (Jest + Supertest)
+- [ ] Caching com Redis
+- [ ] Paginação mandatória em GET /list
+- [ ] Logging com Pino (estruturado)
+
