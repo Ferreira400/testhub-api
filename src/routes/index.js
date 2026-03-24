@@ -38,13 +38,13 @@ router.put   ('/users/:id', auth, uuidValidator, usersCtrl.update);
 router.delete('/users/:id', auth, uuidValidator, usersCtrl.remove);
 
 // Squads
-router.get   ('/squads',                     auth, squadsCtrl.list);
-router.get   ('/squads/:id',                 auth, squadsCtrl.getById);
-router.post  ('/squads',                     auth, squadsCtrl.create);
-router.put   ('/squads/:id',                 auth, squadsCtrl.update);
-router.delete('/squads/:id',                 auth, squadsCtrl.remove);
-router.post  ('/squads/:id/members',         auth, squadsCtrl.addMember);
-router.delete('/squads/:id/members/:userId', auth, squadsCtrl.removeMember);
+router.get   ('/squads',                     auth, paginationValidator, squadsCtrl.list);
+router.get   ('/squads/:id',                 auth, uuidValidator, squadsCtrl.getById);
+router.post  ('/squads',                     auth, squadsValidators.create, squadsCtrl.create);
+router.put   ('/squads/:id',                 auth, uuidValidator, squadsValidators.update, squadsCtrl.update);
+router.delete('/squads/:id',                 auth, uuidValidator, squadsCtrl.remove);
+router.post  ('/squads/:id/members',         auth, uuidValidator, squadsValidators.addMember, squadsCtrl.addMember);
+router.delete('/squads/:id/members/:userId', auth, uuidValidator, userIdValidator, squadsCtrl.removeMember);
 
 // Projects
 router.get   ('/projects',     auth, projectsCtrl.list);
